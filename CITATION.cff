@@ -1,0 +1,50 @@
+cff-version: 1.2.0
+message: "If you use Ink Forest, please cite it as below. If you use its data, please also cite the PRIYA simulations."
+type: software
+title: "Ink Forest: an interactive Lyα tomography game"
+abstract: "An interactive Lyα tomography game: observe simulated Lyα forest sightlines, infer the structure between them, and revise the map. The MIT licence covers the code and documentation; the PRIYA-derived runtime data (assets/ink-forest-data.js) are excluded and redistributed with permission (see DATA.md)."
+version: "1.0.0"
+license: MIT
+url: "https://jibancat.github.io/ink-forest/"
+repository-code: "https://github.com/jibanCat/ink-forest"
+authors:
+  - family-names: Ho
+    given-names: Ming-Feng
+    affiliation: University of Michigan
+keywords:
+  - Lyman-alpha forest
+  - intergalactic medium
+  - tomography
+  - cosmology
+  - education
+  - game
+references:
+  - type: article
+    title: "PRIYA: A New Suite of Lyman-alpha Forest Simulations for Cosmology"
+    authors:
+      - family-names: Bird
+        given-names: Simeon
+      - family-names: Fernandez
+        given-names: Martin
+      - family-names: Ho
+        given-names: Ming-Feng
+      - family-names: Qezlou
+        given-names: Mahdi
+      - family-names: Monadi
+        given-names: Reza
+      - family-names: Ni
+        given-names: Yueying
+      - family-names: Chen
+        given-names: Nianyi
+      - family-names: Croft
+        given-names: Rupert
+      - family-names: Di Matteo
+        given-names: Tiziana
+    journal: "Journal of Cosmology and Astroparticle Physics"
+    year: 2023
+    issue: "10"
+    start: "037"
+    doi: "10.1088/1475-7516/2023/10/037"
+    identifiers:
+      - type: other
+        value: "arXiv:2306.05471"

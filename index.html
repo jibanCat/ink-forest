@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Ink Forest</title>
+<meta name="description" content="Ink Forest: an interactive Lyα tomography game. Observe Lyα forest sightlines, infer the structure between them, and revise the map as new evidence arrives.">
+<link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<style>
+html,body{margin:0;height:100%;background:#7a7874;overflow:hidden;font-family:Georgia,serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+#msg{position:fixed;left:50%;transform:translateX(-50%);top:16px;max-width:min(760px,80vw);text-align:center;color:#f3f0ea;font-size:15px;line-height:1.35;pointer-events:none;opacity:0;transition:opacity .5s;text-shadow:0 1px 3px rgba(0,0,0,.45)}
+#tag{position:fixed;left:10px;right:10px;bottom:8px;color:rgba(240,236,228,.62);font:11px Helvetica,Arial,sans-serif;pointer-events:none}
+#hud-drops{position:fixed;right:16px;top:16px;display:flex;gap:7px;pointer-events:none}
+#hud-gold{position:fixed;left:16px;top:16px;display:flex;gap:4px;flex-wrap:wrap;max-width:30vw;pointer-events:none}
+#deb{display:none;position:fixed;left:16px;bottom:30px;max-width:380px;padding:14px 16px 12px;background:rgba(246,243,236,.94);color:#1d1d1f;border-radius:6px;box-shadow:0 6px 24px rgba(0,0,0,.28);font-size:14px;line-height:1.4}
+#deb h2{font-size:16px;margin:0 0 8px;font-weight:normal}#deb p{margin:0 0 7px}#deb p.s{font-size:12.5px;color:#444}
+#deb .b{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}#deb button,#notes{font:12px Helvetica,Arial,sans-serif;padding:6px 10px;border:1px solid #888;border-radius:4px;background:#fbfaf6;color:#222;cursor:pointer}
+#deb button.on{background:#2a2a2c;color:#f3f0ea;border-color:#2a2a2c}
+#notes{display:none;position:fixed;left:16px;bottom:30px}
+@media (max-width:640px),(max-height:520px){#tag{display:none}}
+@media (max-width:640px){#msg{top:40px;font-size:13.5px;max-width:92vw}#tag{font-size:9.5px}#deb{left:8px;right:8px;bottom:24px;max-width:none;max-height:48vh;overflow:auto;font-size:13px}#hud-gold{max-width:40vw}}
+</style></head><body>
+<canvas id="c"></canvas><div id="msg"></div><div id="tag"></div><div id="deb"></div><button id="notes">Map notes</button>
+<noscript><p style="position:fixed;top:40%;width:100%;text-align:center;color:#f3f0ea">Ink Forest needs JavaScript and WebGL2.</p></noscript>
+<script src="assets/ink-forest-data.js"></script>
+<script>
+(function(){if(!window.SHEETDATA){var m=document.getElementById('msg');m.textContent='The data file for this build is not included (assets/ink-forest-data.js). See DATA.md in the source repository.';m.style.opacity=1;return;}
+ var s=document.createElement('script');s.src='assets/ink-forest.js';document.body.appendChild(s);})();
+</script>
+</body></html>
