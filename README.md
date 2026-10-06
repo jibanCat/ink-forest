@@ -10,13 +10,15 @@ You have ten sightlines into a universe you cannot see. Ride each Lyα forest sp
 
 The game is one loop: **observe** a sightline, **infer** the structure between your sightlines, **revise** the map and your next choice.
 
+A short rules card opens the game; press **Begin**.
+
 1. **Choose a sightline.** Each light above the sheet is the line of sight to a distant quasar. Click it, or on a touch screen tap it twice.
-2. **Ride it.** A drop of ink falls down the sightline. It slows and darkens where intergalactic gas absorbs the quasar's light. What you see and hear is that sightline's Lyα forest spectrum, and only the part already passed.
-3. **Watch the map change.** When the ride ends, the sheet between your sightlines is inferred again from everything you have observed.
+2. **Ride it.** A drop of ink falls down the sightline. It slows and darkens where intergalactic gas absorbs the quasar's light. What you see and hear is that sightline's Lyα forest spectrum, and only the part already passed. On the way the drop collects coins: one for each 1 Mpc/h-wide strip of the sheet this line will newly resolve, so lines far from the ones you know pay most. Now and then one is a diamond, worth 5.
+3. **Watch the map change.** When the ride ends, the sheet between your sightlines is inferred again from everything you have observed. More coins appear wherever the map changed.
 4. **Decide where to look next.** You have ten drops, and the map can never be complete.
 5. **Set a line aside if it looks wrong.** Press and hold a landed line to set aside its damped stretch; hold it again to restore it.
 
-At the end the map holds still, then a short debrief separates what you measured from what you inferred.
+At the end the map holds still. Then a short debrief shows your gold and how much of the sheet you resolved, and separates what you measured from what you inferred.
 
 ## The science in brief
 
@@ -29,7 +31,8 @@ At the end the map holds still, then a short debrief separates what you measured
 | Ink ribbons | **Measured** | The spectrum of each sightline you observed, drawn from that line's own (simulated, noisy) data at full resolution. |
 | Washes between the ribbons | **Inferred** | A statistical estimate of the large-scale gas distribution, computed only from the sightlines you observed. Darker means more absorbing gas than average (denser regions); paler means less (emptier regions). |
 | How settled the ink looks; bare paper | **Inferred uncertainty** | Crisp, dry ink is well constrained; grainy, wet ink is uncertain; bare paper is not constrained by any sightline. |
-| The ride, the ink-and-paper look, camera, sounds, gold, the ten-drop budget | **Presentation and game mechanics** | The ride plays the measured spectrum back in order (its pace, darkness and sound follow it) but adds no information to it. The rest is presentation. |
+| The ride, the ink-and-paper look, camera, sounds, the ten-drop budget | **Presentation and game mechanics** | The ride plays the measured spectrum back in order (its pace, darkness and sound follow it) but adds no information to it. The rest is presentation. |
+| Coins and diamonds | **Game rewards** | Ride coins count the new ground a line will resolve, from sightline positions only; more coins mark where the map changed; diamonds are luck. They never depend on how much a line absorbs and never mark dense gas ([SCIENCE.md](SCIENCE.md) §7). |
 
 **The map is an estimate, never the answer.** The game never shows the simulation's true structure, and the washes are not observed: they are inferred from your sightlines and change as you add more.
 

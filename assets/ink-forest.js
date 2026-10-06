@@ -88,6 +88,13 @@ function posteriorMasked(rows,mrows,lazy){const out={s:new Float32Array(NR*WINB)
   out.job=lazy&&!job.done?job:null;out.jobInfo=job;return out;}
 function posterior(rows,aside,lazy){const mrows=(rows||[]).filter(r=>aside&&(aside.has?aside.has(r):aside.includes(r))&&absorberOf(r));
   if(mrows.length){const t0=performance.now(),f=posteriorMasked(rows,mrows,lazy);lastSolveMs=performance.now()-t0;return f;}return posteriorPlain(rows);}
+// ---- support from line POSITIONS only: c(t) = 1 - Var[T | lines]/Var[T] per transverse column, the same arithmetic as posteriorPlain's
+// variance. No spectrum enters a conditional variance, so this can be evaluated for a line before it is ridden (the ride string uses it).
+function supportPlain(rows){const n=rows.length,c=new Float32Array(NR);if(!n)return c;const Lc=new Float64Array(n*n),K=new Float64Array(n*n),kv=new Float64Array(n),y=new Float64Array(n),red=new Float64Array(NR);
+  for(let q=0;q<NQ;q++){for(let i=0;i<n;i++)for(let j=0;j<n;j++)K[i*n+j]=CDD[Math.abs(rows[i]-rows[j])*NQ+q]+(i===j?M.noise_var:0);
+    for(let i=0;i<n;i++)for(let j=0;j<=i;j++){let v=K[i*n+j];for(let k=0;k<j;k++)v-=Lc[i*n+k]*Lc[j*n+k];Lc[i*n+j]=i===j?Math.sqrt(Math.max(v,1e-30)):v/Lc[j*n+j];}
+    for(let t=0;t<NR;t++){const row=LO+t;let tt=0;for(let a=0;a<n;a++){let v=CTD[Math.abs(row-rows[a])*NQ+q];for(let k=0;k<a;k++)v-=Lc[a*n+k]*y[k];y[a]=v/Lc[a*n+a];tt+=y[a]*y[a];}red[t]+=(q?2:1)*tt;}}
+  for(let t=0;t<NR;t++)c[t]=Math.min(1,Math.max(0,red[t]/N/M.varT));return c;}
 function posteriorPlain(rows){
   const t0=performance.now(),n=rows.length,s=new Float32Array(NR*WINB),c=new Float32Array(NR);if(!n){lastSolveMs=0;return {s,c};}
   const L=new Float64Array(NQ*n*n),WR=new Float64Array(NQ*n),WI=new Float64Array(NQ*n),K=new Float64Array(n*n),ki=rows.map(ROWIDX);
@@ -319,11 +326,7 @@ function drawCut(){if(REPV!=='C'||HOOK.cutY==null)return;const y=HOOK.cutY,b=Mat
   drawQuad([0,y,0.02],[SW/2+0.06,0,0],[0,0,0.34],[0.96,0.95,0.92,0.16],0.08);
   const thick=[],thin=[];for(let t=0;t<NR-1;t++){const [s0,c0]=fieldAt(t,b),[s1]=fieldAt(t+1,b),seg=[rowX(LO+t),y,0.02+0.16*s0,rowX(LO+t+1),y,0.02+0.16*s1];(c0>=0.5?thick:thin).push(...seg);}
   drawFlat(thin,gl.LINES,[0.12,0.12,0.14,0.35]);for(const dz of [-0.0015,0,0.0015])drawFlat(thick.map((v,i)=>i%3===1?v+dz:v),gl.LINES,[0.08,0.08,0.10,0.85]);}
-// ---- gold: returned where the inferred structure changed (from the new posterior only; secondary)
-const pGold=prog(`#version 300 es
-in vec4 aP;uniform mat4 uVP;void main(){gl_Position=uVP*vec4(aP.xyz,1.0);gl_PointSize=aP.w;}`,`#version 300 es
-precision highp float;uniform float uA;out vec4 o;void main(){vec2 d=gl_PointCoord*2.0-1.0;float r=length(d);if(r>1.0)discard;float core=1.0-smoothstep(0.40,0.55,r),ring=exp(-pow((r-0.62)/0.08,2.0)),glow=exp(-r*r*2.5);
- vec3 c=mix(vec3(0.86,0.64,0.16),vec3(1.0,0.92,0.62),(1.0-smoothstep(0.0,0.35,r))*0.6);c=mix(c,vec3(0.30,0.20,0.04),ring*0.7);o=vec4(c,uA*clamp(core+0.9*ring+0.25*glow,0.0,1.0));}`);
+// ---- gold: coins are returned where the inferred structure changed (from the new posterior only; secondary)
 function goldSeeds(prev,cur,r){const t0=r-LO,S=[];   // local maxima of |change| x new support, beyond the line's own cells
   const g=(t,b)=>Math.abs(t-t0)<3?-1:Math.abs(cur.s[t*WINB+b]-prev.s[t*WINB+b])*cAt(cur,t,b);
   for(let t=2;t<NR-2;t+=2)for(let b=3;b<WINB-3;b+=2){if(Math.abs(t-t0)<3)continue;const v=g(t,b);if(v<0.5)continue;let mx=true;for(let dt=-4;dt<=4&&mx;dt+=2)for(let db=-6;db<=6;db+=2)if((dt||db)&&t+dt>=0&&t+dt<NR&&b+db>=0&&b+db<WINB&&g(t+dt,b+db)>v){mx=false;break;}
@@ -370,6 +373,8 @@ const SYN={
     g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.05,t+0.16);g.gain.setValueAtTime(0.05,t+d*0.6);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
     n.connect(hp);hp.connect(bp);bp.connect(am);am.connect(g);send(ctx,o,g,0.18);n.start(t);n.stop(t+d+0.2);},
   gold(ctx,o,t,a){const k=a.amp||1;for(const [p,amp,d] of [[1,0.10,1.4],[2.76,0.035,0.8],[5.4,0.015,0.4]]){const s=ctx.createOscillator(),g=ctx.createGain();s.frequency.value=NOTE(9+a.shot)*p;g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(amp*k,t+0.003);g.gain.exponentialRampToValueAtTime(0.0001,t+d);s.connect(g);send(ctx,o,g,0.55);s.start(t);s.stop(t+d+0.1);}},
+  clink(ctx,o,t,a){const f=NOTE(15+(a.k||0)%5);for(const [p,amp,d] of [[1,0.045,0.35],[2.76,0.02,0.18],[5.4,0.008,0.09]]){const s=ctx.createOscillator(),g=ctx.createGain();s.frequency.value=f*p;g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(amp,t+0.002);g.gain.exponentialRampToValueAtTime(0.0001,t+d);s.connect(g);send(ctx,o,g,0.3);s.start(t);s.stop(t+d+0.05);}},
+  gem(ctx,o,t){[17,19,21,24].forEach((k,i)=>{const tt=t+i*0.06,s=ctx.createOscillator(),g=ctx.createGain();s.type='triangle';s.frequency.value=NOTE(k);g.gain.setValueAtTime(0.0001,tt);g.gain.exponentialRampToValueAtTime(0.05,tt+0.004);g.gain.exponentialRampToValueAtTime(0.0001,tt+0.6);s.connect(g);send(ctx,o,g,0.6);s.start(tt);s.stop(tt+0.7);});},
 };
 function au(type,t,a){AU.ev.push({type,t,a});if(LIVE&&AU.ctx){try{SYN[type](AU.ctx,AU.out,AU.ctx.currentTime+Math.max(0,t-AU.clock),a||{});}catch(e){}}}
 function audioInit(){if(AU.ctx&&AU.ctx.state==='suspended'){try{AU.ctx.resume();}catch(e){}}if(AU.ctx||!LIVE)return;const C=window.AudioContext||window.webkitAudioContext;if(!C)return;AU.ctx=new C();AU.out=auChain(AU.ctx);}
@@ -383,16 +388,28 @@ async function audioWav(dur){const sr=44100,ctx=new OfflineAudioContext(2,Math.c
 // One player action besides choosing: press-and-hold a landed ribbon to set aside its damped stretch, or to restore it.
 const BUDGET=Math.max(1,Math.min(20,+(Q_.get('budget')||10)));   // 25 candidate sightlines, 10 drops
 const TIM={launch:0.8,dry:0.6,pull:1.3,front:2.8,gold:1.0,settle:1.0,hold:0.9,lift:0.6,endHold:7.0};
-const L={phase:'choose',t:0,tp:0,shot:0,R:null,r:-1,log:[],gold:0,seeds:[],fromPose:null,dvMax:0,hold:null,revise:null,nPost:0,msgUntil:0};
+// ---- the ride string and luck. When a drop is sent, coins are laid evenly down its sightline and the drop collects each one as it passes.
+// Their number is the NEW GROUND the line will resolve: the transverse columns it lifts to support c >= 0.30 (the debrief's cut), one coin
+// per COLS_PER_COIN columns, at most MAX_STRING, from line positions only (supportPlain; set-aside stretches are not counted). No
+// spectrum enters it, so it never scales with how much a line absorbs and never marks dense gas. One seeded generator, independent of
+// every spectrum and of the map, decides whether one of the coins is a diamond (worth GEM coins). After the ride, more coins are
+// returned where the inferred map changed (goldSeeds).
+const GEM=5,P_GEM=0.3,COLS_PER_COIN=4,MAX_STRING=10;   // one coin per 1 Mpc/h of newly resolved width
+const SEED=(()=>{const q=Q_.get('seed');if(q!=null&&q!=='')return (+q)>>>0;if(MODE!=='play')return 7;try{return crypto.getRandomValues(new Uint32Array(1))[0];}catch(_){return (Date.now()*2654435761)>>>0;}})();
+let RS=SEED>>>0;function rng(){RS=(RS+0x6D2B79F5)>>>0;let t=RS;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return ((t^(t>>>14))>>>0)/4294967296;}
+function newGround(obs,r){const a=supportPlain(obs),b=supportPlain(obs.concat([r]));let cols=0;for(let t=0;t<NR;t++)if(b[t]>=0.30&&a[t]<0.30)cols++;return {cols,coins:Math.min(MAX_STRING,Math.round(cols/COLS_PER_COIN))};}
+function layString(r,n,k){return {r,c:Array.from({length:n},(_,i)=>({b:Math.round((i+0.5)/n*WINB),gem:i===k,got:0}))};}
+function rideString(r){const g=newGround(ST.obs,r),k=g.coins&&rng()<P_GEM?Math.floor(rng()*g.coins):-1;log('string',{row:r,new_cols:g.cols,coins:g.coins,gem:k>=0});return layString(r,g.coins,k);}
+const L={phase:'choose',t:0,tp:0,shot:0,R:null,r:-1,log:[],gold:0,seeds:[],fromPose:null,dvMax:0,hold:null,revise:null,nPost:0,msgUntil:0,coins:0,gems:0,fly:[],bank:{coins:0,gems:0},landAt:-9,gemAt:-9,plus:0,plusAt:-9,rules:false};
 function log(ev,o){L.log.push(Object.assign({ev,t:+L.t.toFixed(3),shot:L.shot},o||{}));}
 const HINTS={};function hint(k,txt,secs){if(HINTS[k]||MODE==='still')return;HINTS[k]=1;say(txt);L.msgUntil=L.t+(secs||6);}
 const TOUCH=matchMedia('(pointer:coarse)').matches||Q_.get('touch')==='1';
 function start(r){if(L.phase!=='choose'||ST.obs.includes(r)||!SURV.includes(r)||L.shot>=BUDGET)return false;
-  L.r=r;L.R=rideOf(r);L.phase='dive';L.tp=L.t;L.fromPose=JSON.parse(JSON.stringify(CAM.pose));ST.hover=-1;L.hold=null;
+  L.r=r;L.R=rideOf(r);L.string=rideString(r);L.phase='dive';L.tp=L.t;L.fromPose=JSON.parse(JSON.stringify(CAM.pose));ST.hover=-1;L.hold=null;
   au('launch',L.t);au('dive',L.t+TIM.launch,{T:L.R.T,As:Array.from(L.R.As),dt:Array.from(L.R.dt),tb:Array.from(L.R.tb)});
   for(const f of L.R.feats)au('hit',L.t+TIM.launch+f.t,{s:f.s});for(const c of L.R.clears)au('clear',L.t+TIM.launch+c.t);
-  log('choose',{row:r,T:+L.R.T.toFixed(2)});say('');hint('ride','The ride is this sightline’s measured Lyα forest: slower and darker where the gas absorbs.',5.5);return true;}
-function beginEmerge(){const prev=ST.cur,t0=performance.now(),nxt=posterior(ST.obs.concat([L.r]),ST.aside,MODE!=='still'),ms=performance.now()-t0;L.cjob=nxt.job||null;L.cjobT0=performance.now();L.nPost++;   // the posterior is updated only now: the observation is complete
+  log('choose',{row:r,T:+L.R.T.toFixed(2)});say('');hint('ride','The ride is this sightline’s measured Lyα forest: slower and darker where the gas absorbs.',5.5);if(!L.string.c.length&&HINTS.ride)hint('nocoins','No coins on this line: the sightlines around it already resolve this ground.',5);return true;}
+function beginEmerge(){if(L.string&&L.string.r===L.r)L.string.c.forEach((c,i)=>{if(!c.got)pickUp(L.string,c,i);});const prev=ST.cur,t0=performance.now(),nxt=posterior(ST.obs.concat([L.r]),ST.aside,MODE!=='still'),ms=performance.now()-t0;L.cjob=nxt.job||null;L.cjobT0=performance.now();L.nPost++;   // the posterior is updated only now: the observation is complete
   ST.prev=prev;ST.cur=nxt;ST.obs=ST.obs.concat([L.r]);uploadField(TXF[0],prev);if(!L.cjob)uploadField(TXF[1],nxt);
   const u=(L.r-LO+0.5)/NR,Rmax=Math.max(u,1-u)*NR*0.25+4.0;ST.front={u,R:0,W:3.5,Rmax};L.seeds=L.cjob?[]:goldSeeds(prev,nxt,L.r);
   let dv=0;if(!L.cjob)for(let i=0;i<nxt.s.length;i++)dv=Math.max(dv,Math.abs(nxt.s[i]-prev.s[i]));L.dvMax=dv;
@@ -400,8 +417,8 @@ function beginEmerge(){const prev=ST.cur,t0=performance.now(),nxt=posterior(ST.o
   au('brush',L.t,{d:TIM.dry});au('emerge',L.t+TIM.dry+TIM.pull*0.6);
   if(REPV==='C'){let best=-1,bb=WINB>>1;for(let b=0;b<WINB;b++){let v=0;for(let t=0;t<NR;t++)v+=Math.abs(nxt.s[t*WINB+b]-prev.s[t*WINB+b])*cAt(nxt,t,b);if(v>best){best=v;bb=b;}}L.cutTo=depthY(bb);}
   log('emerge',{row:L.r,solve_ms:+ms.toFixed(1),dv_max:+dv.toFixed(3),gold:L.seeds.length,n:ST.obs.length,masked:nxt.masked||[]});}
-function endEmerge(){uploadField(TXF[0],ST.cur);ST.front=null;ST.prev=ST.cur;HOOK.forestFade=null;L.gold+=L.seeds.length;L.shot++;L.R=null;
-  L.phase=L.shot>=BUDGET?'done':'choose';L.tp=L.t;L.fromPose=JSON.parse(JSON.stringify(CAM.pose));log(L.phase==='done'?'done':'ready',{n:ST.obs.length,gold:L.gold});budgetUI();
+function endEmerge(){uploadField(TXF[0],ST.cur);ST.front=null;ST.prev=ST.cur;HOOK.forestFade=null;L.seeds.forEach((g,i)=>{if(g.gem){L.gems++;L.gold+=GEM;}else{L.coins++;L.gold++;}if(!g.flown){const q=project(g.p);launch(g,i,q[0],q[1],L.t+0.08*i);}});L.shot++;L.R=null;
+  L.phase=L.shot>=BUDGET?'done':'choose';L.tp=L.t;L.fromPose=JSON.parse(JSON.stringify(CAM.pose));log(L.phase==='done'?'done':'ready',{n:ST.obs.length,gold:L.gold,coins:L.coins,gems:L.gems});budgetUI();
   if(L.shot===1)hint('sheet','The sheet shows the large-scale structure inferred between your sightlines. Bare paper is still unknown.',6.5);
   if(L.shot===2)hint('hold','Press and hold a landed line to set it aside. Hold it again to restore it.',6.5);
   if(L.phase==='done')say('');}
@@ -443,12 +460,52 @@ function donePose(){const O=overPose();return {eye:[O.eye[0]*1.18,O.eye[1]+0.15,
 // while the debrief card is open the sheet slides clear of it (left card on wide screens, bottom sheet on narrow ones)
 function debriefPose(){const P=donePose(),open=document.getElementById('deb').style.display==='block';if(!open)return P;const narrow=innerWidth<=640,d=narrow?[0,-1.15,0]:[-0.95*SW/3.75,0,0];
   return {eye:V3.add(P.eye,d),tgt:V3.add(P.tgt,d),fov:P.fov};}
-function drawGold(){if(L.phase!=='emerge'||!ST.front)return;const tau=L.t-L.tp,px=cv.height/720,home=[SX0+0.05,STOP+0.32,LINEZ()],pts=[];
-  for(const g of L.seeds){const ta=TIM.dry+TIM.pull*0.55+TIM.front*Math.min(1,(g.d+3.5)/ST.front.Rmax),tf=ET()-TIM.gold*0.95;if(tau<ta)continue;const al=Math.min(1,(tau-ta)/0.25);
-    if(tau<tf){pts.push([g.p,10*px*(0.9+0.15*Math.sin((tau-ta)*9+g.t)),al]);continue;}const a=ease((tau-tf)/(TIM.gold*0.9));if(a>=1)continue;
-    const mid=[(g.p[0]+home[0])/2,Math.max(g.p[1],home[1])+0.4,0.2];pts.push([lerp3(lerp3(g.p,mid,a),lerp3(mid,home,a),a),10*px,1]);}
-  gl.useProgram(pGold.p);gl.uniformMatrix4fv(pGold.u.uVP,false,VP);gl.bindBuffer(gl.ARRAY_BUFFER,dynBuf);attrib(pGold,'aP',dynBuf,4);
-  for(const [q,sz,aa] of pts){gl.uniform1f(pGold.u.uA,0.95*aa);gl.bufferSubData(gl.ARRAY_BUFFER,0,new Float32Array([q[0],q[1],q[2],sz]));gl.drawArrays(gl.POINTS,0,1);}}
+// ---- coins and diamonds, drawn in screen space: on the sheet they pop up where the map changed and spin; then each flies to the tally
+// (top left), where it is counted and chimes. Everything is timed in game time, so recordings stay deterministic.
+const pCoin=prog(`#version 300 es
+in vec2 aQ;uniform vec2 uRes,uP;uniform float uSz;void main(){vec2 p=uP/uRes*2.0-1.0;gl_Position=vec4(p.x,-p.y,0.0,1.0);gl_PointSize=uSz;}`,`#version 300 es
+precision highp float;uniform float uA,uKind,uSpin,uGl;out vec4 o;
+void main(){vec2 d=(gl_PointCoord*2.0-1.0)*1.45;d.y=-d.y;float sx=max(0.10,abs(uSpin));vec2 q=vec2(d.x/sx,d.y);
+ vec4 g=vec4(uKind<0.5?vec3(1.0,0.86,0.45):vec3(0.72,0.95,1.0),0.30*exp(-pow(max(0.0,length(d)-0.55),2.0)*6.0));
+ if(uKind<0.5){float r=length(q);if(r<=1.0){
+   float rim=smoothstep(0.78,0.86,r),ring=exp(-pow((r-0.64)/0.045,2.0)),lit=clamp(0.55+0.45*(q.y*0.6-q.x*0.45),0.0,1.0);
+   vec3 c=mix(vec3(0.76,0.47,0.07),vec3(1.0,0.86,0.36),lit);c=mix(c,vec3(0.55,0.33,0.04),rim*0.8);c+=vec3(0.30,0.22,0.06)*ring*(q.y-q.x>0.0?1.0:-0.6);
+   c*=0.70+0.30*sx;c+=vec3(1.0,0.96,0.82)*0.65*exp(-pow((q.x*0.6+q.y*0.8-uGl)/0.16,2.0))*(1.0-rim);
+   float aa=1.0-smoothstep(0.95,1.0,r);g=vec4(mix(g.rgb,c,aa),max(g.a,aa));}}
+ else{float y=q.y,ax=abs(q.x),w=y>=0.22?mix(1.0,0.56,(y-0.22)/0.40):(y+0.92)/1.14;
+   if(y<=0.62&&y>=-0.92&&ax<=w){float e=w-ax;vec3 c;
+     if(y>=0.22)c=(ax<0.30&&y>0.44)?vec3(0.93,1.0,1.0):(q.x<0.0?vec3(0.62,0.92,1.0):vec3(0.36,0.74,0.95));
+     else{float f=q.x/max(w,1e-3);c=f<-0.5?vec3(0.45,0.82,0.98):f<0.0?vec3(0.80,0.97,1.0):f<0.5?vec3(0.30,0.66,0.92):vec3(0.55,0.86,0.99);}
+     c*=0.75+0.25*sx;c=mix(c,vec3(0.10,0.30,0.50),1.0-smoothstep(0.0,0.05,e));c+=vec3(1.0)*0.6*exp(-pow((q.x*0.6+q.y*0.8-uGl)/0.14,2.0));g=vec4(c,1.0);}
+   float st=(exp(-abs(d.x+0.42)*22.0)*exp(-abs(d.y-0.40)*4.0)+exp(-abs(d.y-0.40)*22.0)*exp(-abs(d.x+0.42)*4.0))*max(0.0,sin(uGl*3.0));
+   g=vec4(mix(g.rgb,vec3(1.0),min(1.0,st)),max(g.a,min(1.0,st)));}
+ o=vec4(g.rgb,g.a*uA);}`);
+const COIN=22,FLY=0.75,STAG=0.1;
+function coinTimes(i,g){return {ta:TIM.dry+TIM.pull*0.55+TIM.front*Math.min(1,(g.d+3.5)/ST.front.Rmax),tc:ET()-TIM.gold*0.95+i*STAG};}
+function hudTarget(gem){const el=GUI.querySelector(gem?'.gem':'.coin'),b=el.getBoundingClientRect();return [b.left+b.width/2,b.top+b.height/2];}
+function launch(g,i,x,y,t0){g.flown=1;L.fly.push({gem:!!g.gem,x0:x,y0:y,t0,ph:g.t*0.7+i});}
+const stringPos=(S,c)=>[rowX(S.r),depthY(c.b),LINEZ()+0.004];
+function pickUp(S,c,i){c.got=1;const q=project(stringPos(S,c));L.fly.push({gem:c.gem,x0:q[0],y0:q[1],t0:L.t,ph:i*1.7,quiet:1});(L.bursts=L.bursts||[]).push({x:q[0],y:q[1],t0:L.t,gem:c.gem});
+  if(c.gem){L.gems++;L.gold+=GEM;}else{L.coins++;L.gold++;}au(c.gem?'gem':'clink',L.t,{k:L.coins+L.gems});log('pickup',{row:S.r,b:c.b,gem:c.gem});}
+function coinsTick(){   // the drop collects the ride string as it passes; after the ride, map coins launch on schedule; finished flights land
+  const S=L.string;if(S&&L.phase==='dive'&&L.R&&L.R.r===S.r){const td=L.t-L.tp-TIM.launch;if(td>=0){const cb=Math.floor(uAt(L.R,td)*WINB);S.c.forEach((c,i)=>{if(!c.got&&c.b<=cb)pickUp(S,c,i);});}}
+  if(L.phase==='emerge'&&ST.front){const tau=L.t-L.tp;L.seeds.forEach((g,i)=>{if(!g.flown&&tau>=coinTimes(i,g).tc){const q=project(g.p);launch(g,i,q[0],q[1],L.t);}});}
+  for(const f of L.fly){if(f.done||L.t<f.t0+FLY)continue;f.done=1;if(f.gem){L.bank.gems++;L.gemAt=L.t;}else{L.bank.coins++;L.landAt=L.t;}
+    const T=hudTarget(f.gem);(L.bursts=L.bursts||[]).push({x:T[0],y:T[1],t0:L.t,gem:f.gem});const v=f.gem?GEM:1;L.plus=L.t-L.plusAt<1.2?L.plus+v:v;L.plusAt=L.t;if(!f.quiet)au(f.gem?'gem':'clink',L.t,{k:L.bank.coins+L.bank.gems});}
+  L.fly=L.fly.filter(f=>!f.done);L.bursts=(L.bursts||[]).filter(b=>L.t-b.t0<0.45);}
+function coinSprite(x,y,sz,kind,spin,a,sw){gl.useProgram(pCoin.p);gl.uniform2f(pCoin.u.uRes,cv.clientWidth,cv.clientHeight);gl.uniform2f(pCoin.u.uP,x,y);gl.uniform1f(pCoin.u.uSz,sz*1.45*devicePixelRatio);
+  gl.uniform1f(pCoin.u.uKind,kind);gl.uniform1f(pCoin.u.uSpin,spin);gl.uniform1f(pCoin.u.uA,a);gl.uniform1f(pCoin.u.uGl,sw);attrib(pCoin,'aQ',qBuf,2);gl.drawArrays(gl.POINTS,0,1);}
+const backOut=k=>{const c1=1.70158,c3=c1+1;return 1+c3*Math.pow(k-1,3)+c1*Math.pow(k-1,2);},sweepAt=(t,ph)=>-2.0+((t*1.1+ph)%3.2)*1.3;
+function drawCoins(){coinsTick();const sz0=COIN*Math.min(1.25,Math.max(0.8,cv.clientHeight/720)),S=L.string;
+  if(S&&L.phase==='dive'&&L.R&&L.R.r===S.r){const tau=L.t-L.tp;S.c.forEach((c,i)=>{if(c.got)return;const a=Math.min(1,Math.max(0,(tau-0.12*i)/0.4));if(a<=0)return;const q=project(stringPos(S,c));
+      coinSprite(q[0],q[1],sz0*(c.gem?1.05:0.9)*backOut(a),c.gem?1:0,Math.cos(L.t*3+i*1.3),a,sweepAt(L.t,i*1.3));});}
+  if(L.phase==='emerge'&&ST.front){const tau=L.t-L.tp;L.seeds.forEach((g,i)=>{if(g.flown)return;const ta=coinTimes(i,g).ta;if(tau<ta)return;const s=tau-ta,k=Math.min(1,s/0.35),q=project(g.p);
+      if(s<0.45)ring(q[0],q[1],sz0*(1.2+3.2*s),g.gem?[0.75,0.95,1.0]:[1.0,0.86,0.40],0.9*(1-s/0.45),-1);
+      coinSprite(q[0],q[1]-3*Math.sin(s*3+g.t),sz0*(g.gem?1.15:1)*backOut(k),g.gem?1:0,Math.cos(s*3.2+g.t*0.7),Math.min(1,k*1.6),sweepAt(L.t,g.t));});}
+  for(const f of L.fly){const a=Math.min(1,Math.max(0,(L.t-f.t0)/FLY)),e=a*a*(3-2*a),T=hudTarget(f.gem),cx=f.x0*0.55+T[0]*0.45,cy=T[1]+0.12*(f.y0-T[1]);
+    const x=(1-e)*(1-e)*f.x0+2*(1-e)*e*cx+e*e*T[0],y=(1-e)*(1-e)*f.y0+2*(1-e)*e*cy+e*e*T[1];
+    coinSprite(x,y,sz0*(f.gem?1.15:1)*(1+0.25*Math.sin(Math.PI*e))*(1-0.15*e),f.gem?1:0,Math.cos((L.t-f.t0)*14+f.ph),1,sweepAt(L.t,f.ph));}
+  for(const b of L.bursts||[]){const s=L.t-b.t0;ring(b.x,b.y,30+110*s,b.gem?[0.75,0.95,1.0]:[1.0,0.86,0.40],0.85*(1-s/0.45),-1);}}
 function render(){const W_=Math.round(cv.clientWidth*devicePixelRatio),H_=Math.round(cv.clientHeight*devicePixelRatio);if(cv.width!==W_||cv.height!==H_){cv.width=W_;cv.height=H_;}
   gl.viewport(0,0,cv.width,cv.height);camUpdate();gl.clearColor(0.3,0.3,0.3,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   gl.disable(gl.DEPTH_TEST);gl.useProgram(pBg.p);gl.uniform1f(pBg.u.uRep,REPI());attrib(pBg,'aQ',qBuf,2);gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
@@ -462,18 +519,25 @@ function render(){const W_=Math.round(cv.clientWidth*devicePixelRatio),H_=Math.r
   if(L.R&&(L.phase==='dive'||L.phase==='emerge')){const tau=L.t-L.tp,td=L.phase==='dive'?tau-TIM.launch:L.R.T,u=L.phase==='dive'?uAt(L.R,td):1,
       outF=L.phase==='dive'?1:1-ease(tau/TIM.dry);L.maxBin=drawWake(L.R,Math.max(0,td),u,outF);if(L.phase==='dive'){L.wakeFrames=(L.wakeFrames||0)+1;if(L.maxBin>Math.floor(u*WINB))L.wakeViol=(L.wakeViol||0)+1;}
     if(L.phase==='dive'&&td>=0)drawDrop(L.R,u,td);}
-  drawSources();drawGold();drawHoldRing();if(HOOK.post)HOOK.post();goldUI();}
-// ---- minimal DOM: the remaining drops (budget) and the gold tally; no labels, no numbers about gain
+  drawSources();drawHoldRing();drawCoins();if(HOOK.post)HOOK.post();hudUI();}
+// ---- minimal DOM: the remaining drops (budget) and the gold tally (coins, and diamonds once there are any); no numbers about the data
 const UI=document.createElement('div');UI.id='hud-drops';document.body.appendChild(UI);
-const GUI=document.createElement('div');GUI.id='hud-gold';document.body.appendChild(GUI);
+const gemSVG=c=>`<svg class="gem${c?' '+c:''}" viewBox="0 0 24 22" aria-hidden="true"><path d="M5 1L0 8h8z" fill="#c9f3ff"/><path d="M5 1h14l-3 7H8z" fill="#effdff"/><path d="M19 1l5 7h-8z" fill="#8fdcf5"/><path d="M0 8h8l4 13z" fill="#9fe3f8"/><path d="M8 8h8l-4 13z" fill="#5cc2e8"/><path d="M16 8h8L12 21z" fill="#2f8fc4"/><path d="M5 1h14l5 7-12 13L0 8z" fill="none" stroke="#1d5f86" stroke-width="1.3" stroke-linejoin="round"/></svg>`;
+const GUI=document.createElement('div');GUI.id='hud-gold';GUI.innerHTML='<span class="coin"></span><span class="n">0</span><span class="gg">'+gemSVG()+'<span class="n">0</span></span><span class="plus"></span>';document.body.appendChild(GUI);
+const HN=GUI.querySelectorAll('.n'),HG=GUI.querySelector('.gg'),HP=GUI.querySelector('.plus'),HC=GUI.querySelector('.coin'),HD=GUI.querySelector('.gem'),HS={};
 function budgetUI(){UI.innerHTML='';for(let i=0;i<BUDGET;i++){const d=document.createElement('div');const used=i<L.shot;d.style.cssText=`width:10px;height:13px;border-radius:50% 50% 50% 50%/60% 60% 40% 40%;${used?'border:1.5px solid rgba(240,236,228,.55)':'background:rgba(240,236,228,.92)'}`;UI.appendChild(d);}}
-let goldShown=-1;function goldUI(){const n=L.gold+(L.phase==='emerge'&&L.t-L.tp>=ET()-TIM.gold*0.1?L.seeds.length:0);if(n===goldShown)return;goldShown=n;GUI.innerHTML='';
-  const dot=()=>{const d=document.createElement('div');d.style.cssText='width:8px;height:8px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#fff1b8,#d9a62a 55%,#6b4a0c)';GUI.appendChild(d);};
-  if(n<=12){for(let i=0;i<n;i++)dot();}else{dot();const t=document.createElement('div');t.textContent='\u00d7'+n;t.style.cssText='font:11px Helvetica,Arial,sans-serif;color:#f3e6bf;line-height:8px';GUI.appendChild(t);}}
+function setSt(el,k,v){const key=k+(el===HC?'c':el===HD?'d':el===HP?'p':el===HN[0]?'n0':el===HN[1]?'n1':'g');if(HS[key]!==v){HS[key]=v;el.style[k]=v;}}
+function hudUI(){const b=L.bank;HN[0].textContent!==String(b.coins)&&(HN[0].textContent=b.coins);HN[1].textContent!==String(b.gems)&&(HN[1].textContent=b.gems);setSt(HG,'visibility',b.gems?'visible':'hidden');
+  const pc='scale('+(1+0.35*Math.exp(-Math.max(0,L.t-L.landAt)*9)).toFixed(3)+')',pg='scale('+(1+0.45*Math.exp(-Math.max(0,L.t-L.gemAt)*7)).toFixed(3)+')',pa=L.t-L.plusAt;
+  setSt(HC,'transform',pc);setSt(HN[0],'transform',pc);setSt(HD,'transform',pg);setSt(HN[1],'transform',pg);
+  setSt(HP,'opacity',pa<1.2?(1-Math.max(0,(pa-0.6)/0.6)).toFixed(3):'0');setSt(HP,'transform','translateY('+(-10*Math.min(1,Math.max(0,pa)/1.2)).toFixed(1)+'px)');if(pa<1.2&&HP.textContent!=='+'+L.plus)HP.textContent='+'+L.plus;}
 function say(m){const e=document.getElementById('msg');e.textContent=m;e.style.opacity=m?1:0;}
-// ---- the end: hold on the reconstructed sheet first; then a restrained, science-facing debrief (no score, no comparison with the simulation)
+// ---- the end: hold on the reconstructed sheet first; then the debrief: the player's gold and the share of the sheet resolved (support
+// c >= 0.30, the same cut as the 'unresolved' layer), then the science (no comparison with the simulation)
+function resolvedShare(){const f=ST.cur;let n=0;for(let t=0;t<NR;t++)for(let b=0;b<WINB;b++)if(cAt(f,t,b)>=0.30)n++;return n/(NR*WINB);}
+function scoreHTML(){const c=L.coins,g=L.gems,tot=c+GEM*g;return `<div class="score"><span class="coin"></span>${tot} gold<small>${c} coin${c===1?'':'s'}${g?` + ${g} diamond${g===1?'':'s'} × ${GEM}`:''}</small></div><p class="res"><b>${Math.round(100*resolvedShare())}%</b> of the sheet resolved</p>`;}
 function showDebrief(){if(L.phase==='debrief')return;L.phase='debrief';L.debriefAt=L.t;const e=document.getElementById('deb'),n=ST.obs.length,k=ST.aside.size;
-  e.innerHTML=`<h2>Your map of the intergalactic medium</h2>
+  e.innerHTML=`${scoreHTML()}<h2>Your map of the intergalactic medium</h2>
 <p><b>Measured</b>: the ink lines, the Lyα forest recorded along your ${n} sightline${n===1?'':'s'}.</p>
 <p><b>Inferred</b>: the washes between them; darker where the gas absorbs more than average, paler where it absorbs less.</p>
 <p><b>Unresolved</b>: bare paper, which none of your sightlines constrains.</p>
@@ -487,9 +551,20 @@ function showDebrief(){if(L.phase==='debrief')return;L.phase='debrief';L.debrief
   document.getElementById('deb-hide').onclick=()=>{e.style.display='none';document.getElementById('notes').style.display='block';L.tp=L.t;L.fromPose=JSON.parse(JSON.stringify(CAM.pose));};
   document.getElementById('notes').onclick=()=>{e.style.display='block';document.getElementById('notes').style.display='none';L.tp=L.t;L.fromPose=JSON.parse(JSON.stringify(CAM.pose));};
   document.getElementById('deb-new').onclick=()=>location.reload();
-  log('debrief',{n,aside:[...ST.aside]});}
+  log('debrief',{n,aside:[...ST.aside],coins:L.coins,gems:L.gems,gold:L.gold,resolved:+resolvedShare().toFixed(4)});}
 function hideDebrief(){document.getElementById('deb').style.display='none';document.getElementById('notes').style.display='none';HOOK.layer=0;}
 // ---------------------------------------------------------------- live play
+// ---- the rules, shown once before play: the objective and the three moves. Begin also unlocks sound (it is a user gesture).
+const RULES_ON=MODE==='play'&&Q_.get('rules')!=='0';
+function showRules(onBegin){const R=document.getElementById('rules'),n=BUDGET===10?'ten':String(BUDGET);
+  R.innerHTML=`<div class="card" role="dialog" aria-labelledby="rules-h"><h1 id="rules-h">Ink Forest</h1><p class="sub">an interactive Lyα tomography game</p>
+<p class="goal"><b>The goal:</b> uncover the cosmic web hidden in the sheet, using ${n} drops of ink.</p>
+<ol><li><b>Pick a light.</b> ${TOUCH?'Tap it, then tap it again.':'Click it.'} Its drop rides one quasar sightline, the measured Lyα forest, collecting coins <span class="coin ic"></span> along the way: one for each new strip of the sheet it will resolve, so lines far from the ones you know pay most. Now and then one is a diamond ${gemSVG('ic')}, worth ${GEM}.</li>
+<li><b>The map between your lines is inferred anew.</b> More gold appears wherever your drop changed it.</li>
+<li><b>A line that looks wrong?</b> Press and hold it to set its damped stretch aside. Hold it again to restore it.</li></ol>
+<p class="end">At the end: your gold, and how much of the sheet you resolved.</p><button id="rules-go">Begin</button></div>`;
+  R.style.display='flex';L.rules=true;const go=document.getElementById('rules-go');
+  go.onclick=()=>{audioInit();R.style.display='none';L.rules=false;log('rules_begin',{});onBegin();};try{go.focus({preventScroll:true});}catch(_){}}
 // Sources: mouse = hover shows the column, click sends the drop. Touch = tap (or slide along the row) highlights a light, a second tap on the
 // same light sends the drop. A ribbon (an observed line, on the sheet) pressed and held for TIM.hold s, without moving, sets its damped
 // stretch aside / restores it; a tap on a ribbon does nothing; moving cancels the hold and orbits instead.
@@ -511,7 +586,8 @@ function drawHoldRing(){if(L.hold)ring(L.hold.x,L.hold.y,58,[0.10,0.10,0.11],0.9
 const FT=[],FTE=[],FTB=[],FTR=[];
 document.getElementById('tag').textContent=`Simulated Lyα forest sightlines (PRIYA, z = 3), depth ${X0M}–${X0M+40} Mpc/h, observed with noise; the structure between the lines is inferred from them alone.`;
 if(MODE==='play'){setObs(PRE_());CAM.pose=overPose();budgetUI();let last=performance.now(),ptr=null,orbit=[0,0];
-  setTimeout(()=>hint('start',TOUCH?'Ten drops of ink. Tap a light above the sheet, then tap it again to send a drop down its sightline.':'Ten drops of ink. Choose a light above the sheet to send a drop down its sightline.',7),400);
+  const startHint=()=>hint('start',TOUCH?'Ten drops of ink. Tap a light above the sheet, then tap it again to send a drop down its sightline.':'Ten drops of ink. Choose a light above the sheet to send a drop down its sightline.',7);
+  if(RULES_ON)showRules(()=>setTimeout(startHint,300));else setTimeout(startHint,400);
   cv.addEventListener('contextmenu',e=>e.preventDefault());
   cv.addEventListener('pointerdown',e=>{audioInit();if(ptr)return;try{cv.setPointerCapture(e.pointerId);}catch(_){}
     const touch=e.pointerType!=='mouse';ptr={id:e.pointerId,x:e.clientX,y:e.clientY,touch,moved:false,o:orbit.slice(),consumed:false,scrub:false};

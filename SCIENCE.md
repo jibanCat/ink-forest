@@ -2,7 +2,7 @@
 
 This document explains what every element of the Ink Forest picture means, for readers with a background in cosmology or statistics. The [README](README.md) gives the short version.
 
-The game is one loop: **observe** a sightline, **infer** the structure between the observed sightlines, **revise** the map and the next choice. Everything on screen is one of three kinds: **measured**, **inferred** or **presentation** (§7).
+The game is one loop: **observe** a sightline, **infer** the structure between the observed sightlines, **revise** the map and the next choice. Everything on screen is one of three kinds: **measured**, **inferred** or **presentation** (§8). Coins and diamonds are game rewards with fixed rules (§7).
 
 ## 1. The plane and the sightlines
 
@@ -69,7 +69,7 @@ The ribbons are the evidence: they are never smoothed toward the inferred field,
 - Bare paper: unconstrained.
 - There are no uncertainty boundaries, fog or masks.
 
-**In the debrief,** "unresolved" means support below 0.30.
+**Resolved and unresolved.** A point is resolved when its support is at least 0.30. The debrief's "unresolved" layer, the end score's share of the sheet resolved and the ride coins (§7) all use this one cut.
 
 ## 5. Damped absorbers and setting a line aside
 
@@ -105,8 +105,35 @@ The ride is causal:
 **No early information.**
 - The map is not updated until the ride is complete.
 - The candidate lights never reveal anything about a sightline before it is chosen: unobserved spectra cannot affect what is on screen.
+- The coins laid on a chosen line depend only on where the sightlines are (§7), not on the line's spectrum.
 
-## 7. Measured, inferred, presentation
+## 7. Rewards: coins and diamonds
+
+Coins and diamonds are game rewards. They follow fixed rules, and none of them is a measurement.
+
+**Ride coins: new ground.** When a sightline is chosen, coins are laid evenly down it, and the drop collects each one as it passes.
+- **How many.** One coin for every 1 Mpc/h of sheet width the line will newly resolve, at most 10. That width is counted in transverse columns whose support rises from below 0.30 to at least 0.30 when the line is added.
+- **Why this is known before the ride.** Support is a conditional variance. For a Gaussian field it depends only on where the sightlines are, never on what they measure. The count therefore needs no spectrum, and it is evaluated with the same arithmetic as the estimator's support.
+- **In play.** A line far from the ones already observed pays most. A line that fills a gap its neighbours already resolve pays nothing.
+- **Not counted.** Set-aside stretches.
+
+**Map coins.** After each ride, coins appear where the inferred map changed most:
+- up to seven places;
+- the largest changes in s, weighted by the new support, above 0.5 σ_T;
+- at least 0.75 Mpc/h from the new line.
+
+Setting a line aside or restoring it pays nothing.
+
+**Diamonds.** On each ride that lays coins, a seeded random draw, independent of all data, makes one of them a diamond 30% of the time. A diamond counts as 5 coins.
+
+**What the rewards never do.**
+- They never depend on how much a line absorbs.
+- They never mark dense or empty gas.
+- They never use a sightline before it is observed.
+
+**End score.** Total gold, and the share of the sheet resolved (support ≥ 0.30).
+
+## 8. Measured, inferred, presentation
 
 | Element | Category |
 |---|---|
@@ -116,11 +143,12 @@ The ride is causal:
 | The ride: the drop's darkness, pace and sound | **Presentation of measured data**: the observed spectrum played back in order; it adds nothing to it |
 | The revision wave after each observation or set-aside | **Presentation** of the change from the old to the new estimate |
 | The lifted, hollow stretch of a set-aside ribbon | **Presentation** of the fact that those measured pixels are not used |
-| Ink-and-paper material, camera, other sounds, gold and reward effects, ten-drop budget, hints | **Presentation and game mechanics** |
+| Coins, diamonds and the gold tally | **Game mechanics** with fixed rules (§7) |
+| Ink-and-paper material, camera, other sounds, reward effects, ten-drop budget, rules card, hints | **Presentation and game mechanics** |
 
 The inferred washes are never presented as observations: they are an estimate from the observed sightlines and change as sightlines are added or set aside.
 
-## 8. Limitations
+## 9. Limitations
 
 - **Simulated, not observed.** One PRIYA simulation, one plane, one noise realisation. Real Lyα tomography must also handle continuum fitting, spectral resolution, metal lines, varying noise and irregular sightline positions.
 - **Two dimensions only.** A 2D slice, not a 3D reconstruction.
@@ -130,7 +158,7 @@ The inferred washes are never presented as observations: they are an estimate fr
 - **A simple damped-absorber rule,** a threshold on one spectrum, as described in §5.
 - **No comparison with the true field in the game.** The player never sees the true field. Developer checks against it were used only to validate the method.
 
-## 9. Parameters
+## 10. Parameters
 
 | Quantity | Value |
 |---|---|
@@ -144,3 +172,6 @@ The inferred washes are never presented as observations: they are an estimate fr
 | Covariance | 250 sightlines outside the survey; taper 15–30 Mpc/h |
 | Damped-absorber rule | core A > 0.93 for ≥ 40 × 20 km/s; extended while A > 0.3 |
 | Support shown as unresolved | c < 0.30 |
+| Ride coins | 1 per 1 Mpc/h of newly resolved width (c ≥ 0.30), at most 10 per ride |
+| Map coins | up to 7 per ride, where the support-weighted change in s exceeds 0.5 σ_T |
+| Diamonds | one ride coin, with probability 0.3 per ride; worth 5 coins |
